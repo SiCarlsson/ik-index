@@ -45,42 +45,52 @@ class Database:
     #   Create tables in database if not yet exists
     ###
     def create_tables(self):
-        # Instruments table
+        # Issuers table
         self.cursor.execute(
-            """CREATE TABLE IF NOT EXISTS Instruments (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            namn VARCHAR(150),
-            typ VARCHAR(75),
-            isin VARCHAR(75)
+            """CREATE TABLE IF NOT EXISTS Issuers (
+                id INT AUTO_INCREMENT PRIMARY KEY
             )"""
         )
 
-        # Persons table
+        # People table
         self.cursor.execute(
-            """CREATE TABLE IF NOT EXISTS Persons (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            namn VARCHAR(150)
+            """CREATE TABLE IF NOT EXISTS People (
+                id INT AUTO_INCREMENT PRIMARY KEY
             )"""
         )
 
-        # Transactions Table
+        # Roles Positions
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS Roles (
+                id INT AUTO_INCREMENT PRIMARY KEY
+            )"""
+        )
+
+        # Transactions Positions
         self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS Transactions (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            pub_datum DATE,
-            emittent VARCHAR(100),
-            person_id INT,
-            befattning VARCHAR(175),
-            narstaende VARCHAR(100),
-            karaktar VARCHAR(100),
-            instrument_id INT,
-            datum DATE,
-            volym INT,
-            volymenhet VARCHAR(50),
-            pris DECIMAL(14,6),
-            valuta VARCHAR(25),
-            FOREIGN KEY (id) REFERENCES Persons(id),
-            FOREIGN KEY (id) REFERENCES Instruments(id)
+                id INT AUTO_INCREMENT PRIMARY KEY
+            )"""
+        )
+
+        # Dates Positions
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS Dates (
+                id INT AUTO_INCREMENT PRIMARY KEY
+            )"""
+        )
+
+        # Instruments Positions
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS Instruments (
+                id INT AUTO_INCREMENT PRIMARY KEY
+            )"""
+        )
+
+        # Currencies Positions
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS Currencies (
+                id INT AUTO_INCREMENT PRIMARY KEY
             )"""
         )
 
