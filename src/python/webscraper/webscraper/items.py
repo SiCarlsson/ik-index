@@ -1,12 +1,18 @@
-# Define here the models for your scraped items
-#
-# See documentation in:
-# https://docs.scrapy.org/en/latest/topics/items.html
-
 import scrapy
 
 
 class WebscraperItem(scrapy.Item):
-    # define the fields for your item here like:
-    # name = scrapy.Field()
-    pass
+    publication_date = scrapy.Field()
+    issuer = scrapy.Field()
+    name = scrapy.Field()
+    position = scrapy.Field()
+    relatives = scrapy.Field()
+    nature_of_purchase = scrapy.Field()
+    instrument_name = scrapy.Field()
+    instrument_type = scrapy.Field()
+    isin = scrapy.Field()
+    transaction_date = scrapy.Field()
+    volume = scrapy.Field()
+    volume_unit = scrapy.Field()
+    price = scrapy.Field()
+    curreny = scrapy.Field()
