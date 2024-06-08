@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Database:
     def __init__(self):
         self.create_conn()
@@ -12,6 +13,7 @@ class Database:
 
     def create_db(self):
         """Creates a batabase if it not does not exists"""
+
         db_conn = mysql.connector.connect(
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
@@ -24,12 +26,14 @@ class Database:
 
     def create_conn(self):
         """Creates a connection and cursor with the database that is stored in the object"""
+
         self.create_db()
         self.establish_conn()
         self.cursor = self.conn.cursor()
 
     def establish_conn(self):
         """Establishes wanted connections"""
+
         self.conn = mysql.connector.connect(
             user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"),
@@ -84,5 +88,6 @@ class Database:
 
     def close(self):
         """Close both the cursor and connection to the database"""
+        
         self.cursor.close()
         self.conn.close()
