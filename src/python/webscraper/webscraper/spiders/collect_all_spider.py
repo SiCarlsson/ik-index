@@ -1,6 +1,7 @@
 import scrapy
 import time
 
+from datetime import datetime
 from scrapy.http import Response
 
 from ..items import WebscraperItem
@@ -13,6 +14,7 @@ class AllFinancialDataSpider(scrapy.Spider):
         "https://marknadssok.fi.se/publiceringsklient?page=1",
     ]
 
+    CURRENT_DATE = datetime.today().strftime("%Y-%m-%d")
     MAXIMUM_PAGE_NUMBER = 0
     CURRENT_PAGE_NUMBER = 1
 
@@ -20,9 +22,12 @@ class AllFinancialDataSpider(scrapy.Spider):
         self.initialize_spider(response)
 
         for row in range(0, self.get_table_lenght(response)):
-            yield self.extract_item(response, row)
+            item = self.extract_item(response, row)
 
-        if self.CURRENT_PAGE_NUMBER is not 5:
+            if item["publication_date"] != self.CURRENT_DATE:
+                yield item
+
+        if self.CURRENT_PAGE_NUMBER is not 15:
             next_page_url = f"https://marknadssok.fi.se/publiceringsklient?page={self.CURRENT_PAGE_NUMBER + 1}"
             if next_page_url is not None:
                 self.CURRENT_PAGE_NUMBER += 1
