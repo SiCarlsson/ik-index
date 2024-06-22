@@ -93,10 +93,10 @@ class AllFinancialDataSpider(scrapy.Spider):
         item["name"] = response.xpath(
             f'//*[@id="grid-list"]/div[1]/div/table/tbody/tr[{row + 1}]/td[3]/text()'
         ).extract_first()
-        item["position"] = response.xpath(
+        item["role"] = response.xpath(
             f'//*[@id="grid-list"]/div[1]/div/table/tbody/tr[{row + 1}]/td[4]/text()'
         ).extract_first()
-        item["relatives"] = response.xpath(
+        item["related"] = response.xpath(
             f'//*[@id="grid-list"]/div[1]/div/table/tbody/tr[{row + 1}]/td[5]/text()'
         ).extract_first()
         item["nature_of_purchase"] = response.xpath(

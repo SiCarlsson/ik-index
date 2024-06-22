@@ -1,44 +1,165 @@
 import os
 import mysql.connector
-
 from mysql.connector import errorcode
-from scrapy.exceptions import DropItem
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
-class MySqlPipeline:
+class DataCleansePipeline:
+    def __init__(self):
+        pass
 
+class MySqlPipeline:
     def __init__(self):
         self.host = os.getenv("DB_HOST")
         self.user = os.getenv("DB_USER")
         self.password = os.getenv("DB_PASSWORD")
         self.database = os.getenv("DB_SCHEMA")
+        self.conn = None
+        self.cursor = None
 
     def open_spider(self, spider):
+        """Method called when the spider is opened."""
         self.check_db_exists()
+        self.create_db_connection()
+        self.add_db_tables()
 
     def check_db_exists(self):
-        """Checks if the database exists and creates it if not"""
-        db_conn = mysql.connector.connect(
-            user=self.user,
-            password=self.password,
-            host=self.host,
-        )
-        db_conn.cursor().execute(
-            f"""CREATE DATABASE IF NOT EXISTS {os.getenv("DB_SCHEMA")}"""
-        )
+        """Checks if the database exists and creates it if not."""
+        try:
+            db_conn = mysql.connector.connect(
+                user=self.user,
+                password=self.password,
+                host=self.host,
+            )
+            cursor = db_conn.cursor()
+            cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.database}")
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+        finally:
+            cursor.close()
+            db_conn.close()
 
     def create_db_connection(self):
-        """Creates a connection to the database"""
-        self.conn = mysql.connector.connect(
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD"),
-            host=os.getenv("DB_HOST"),
-            database=os.getenv("DB_SCHEMA"),
+        """Creates a connection to the database."""
+        try:
+            self.conn = mysql.connector.connect(
+                user=self.user,
+                password=self.password,
+                host=self.host,
+                database=self.database,
+            )
+            self.cursor = self.conn.cursor()
+        except mysql.connector.Error as err:
+            print(f"Error: {err}")
+
+    def add_db_tables(self):
+        """Create necessary tables in the database."""
+        self.create_instruments_table()
+        self.create_roles_table()
+        self.create_people_table()
+        self.create_dates_table()
+        self.create_currencies_table()
+        self.create_transactions_table()
+
+    def create_instruments_table(self):
+        """Create instruments table if not exists."""
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS Instruments (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(200),
+            type VARCHAR(75),
+            isin VARCHAR(40),
+            issuer VARCHAR(255)
+            )"""
         )
-        self.cursor = self.conn.cursor()
+
+    def create_roles_table(self):
+        """Create roles table if not exists."""
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS Roles (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            role VARCHAR(255)
+            )"""
+        )
+
+    def create_people_table(self):
+        """Create people table if not exists."""
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS People (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            role_id INT,
+            name VARCHAR(255),
+            related BOOLEAN,
+            FOREIGN KEY (role_id) REFERENCES Roles(id)
+            )"""
+        )
+
+    def create_dates_table(self):
+        """Create dates table if not exists."""
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS Dates (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            date DATE
+            )"""
+        )
+
+    def create_currencies_table(self):
+        """Create currencies table if not exists."""
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS Currencies (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            currency VARCHAR(10)
+            )"""
+        )
+
+    def create_transactions_table(self):
+        """Create transactions table if not exists."""
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS Transactions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            people_id INT,
+            instrument_id INT,
+            purchase_date_id INT,
+            publication_date_id INT,
+            nature_of_purchase VARCHAR(100),
+            volume INT,
+            volume_unit VARCHAR(50),
+            price DECIMAL(14, 6),
+            currency_id INT,
+            FOREIGN KEY (people_id) REFERENCES People(id),
+            FOREIGN KEY (instrument_id) REFERENCES Instruments(id),
+            FOREIGN KEY (purchase_date_id) REFERENCES Dates(id),
+            FOREIGN KEY (publication_date_id) REFERENCES Dates(id),
+            FOREIGN KEY (currency_id) REFERENCES Currencies(id)
+            )"""
+        )
 
     def process_item(self, item, spider):
+        """Method called for every item pipeline component."""
+        try:
+            # Assuming 'item' is a dictionary with the necessary fields to insert into tables
+            # Insert the logic to insert data into tables here
+            # e.g., self.insert_into_table(item)
+            pass
+        except mysql.connector.Error as err:
+            print(f"Error processing item: {err}")
+            self.conn.rollback()
+        else:
+            self.conn.commit()
         return item
+
+    def close_spider(self, spider):
+        """Method called when the spider is closed."""
+        self.close_db_connection()
+
+    def close_db_connection(self):
+        """Close both the cursor and the connection to the database."""
+        try:
+            if self.cursor:
+                self.cursor.close()
+            if self.conn:
+                self.conn.close()
+        except mysql.connector.Error as err:
+            print(f"Error closing connection: {err}")
