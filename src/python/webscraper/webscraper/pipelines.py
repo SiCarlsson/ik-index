@@ -25,7 +25,9 @@ class DataCleansePipeline:
         item["price"] = self.remove_all_spaces(item["price"])
         item["price"] = self.swap_decimal(item["price"])
 
-        item["related"] = self.swap_boolean(item["related"])
+        item["related"] = self.handle_related_none(item["related"])
+
+        item["status"] = self.handle_status_none(item["status"])
 
         return item
 
@@ -77,7 +79,7 @@ class DataCleansePipeline:
         """
         return field.replace(",", ".")
 
-    def handle_boolean_none(self, field):
+    def handle_related_none(self, field):
         """Unifies all false boolean values
 
         Args:
@@ -90,6 +92,20 @@ class DataCleansePipeline:
             field = "Nej"
 
         return field
+
+    def handle_status_none(self, field):
+        """Unifies all None boolean values
+
+        Args:
+              field (str): item field that should be converted
+
+          Returns:
+              str: converted string
+        """
+        if field is None:
+            return "NaN"
+        else:
+            return field
 
     def close_spider(self, spider):
         """Method called when the spider is closed"""
@@ -187,7 +203,7 @@ class MySqlPipeline:
         self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS Dates (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            date DATE
+            date DATE UNIQUE
             )"""
         )
 
@@ -196,7 +212,7 @@ class MySqlPipeline:
         self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS Currencies (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            currency VARCHAR(10)
+            currency VARCHAR(10) UNIQUE
             )"""
         )
 
