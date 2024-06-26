@@ -1,6 +1,7 @@
 import os
 import mysql.connector
-from mysql.connector import errorcode
+
+from scrapy.exceptions import DropItem
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,9 +11,17 @@ class DataCleansePipeline:
     def __init__(self):
         pass
 
+
+
+    """OPEN SPIDER"""
+
     def open_spider(self, spider):
         """Method called when the spider is opened"""
         pass
+
+
+
+    """PROCESS ITEM"""
 
     def process_item(self, item, spider):
         """Method called for every item pipeline component"""
@@ -107,6 +116,10 @@ class DataCleansePipeline:
         else:
             return field
 
+
+
+    """CLOSE SPIDER"""
+
     def close_spider(self, spider):
         """Method called when the spider is closed"""
         pass
@@ -120,6 +133,10 @@ class MySqlPipeline:
         self.database = os.getenv("DB_SCHEMA")
         self.conn = None
         self.cursor = None
+
+
+
+    """OPEN SPIDER"""
 
     def open_spider(self, spider):
         """Method called when the spider is opened"""
@@ -139,9 +156,6 @@ class MySqlPipeline:
             cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.database}")
         except mysql.connector.Error as err:
             print(f"Error: {err}")
-        finally:
-            cursor.close()
-            db_conn.close()
 
     def create_db_connection(self):
         """Creates a connection to the database."""
@@ -172,7 +186,7 @@ class MySqlPipeline:
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(200),
             type VARCHAR(75),
-            isin VARCHAR(40),
+            isin VARCHAR(40) UNIQUE,
             issuer VARCHAR(255)
             )"""
         )
@@ -238,19 +252,84 @@ class MySqlPipeline:
             )"""
         )
 
+
+
+    """PROCESS ITEM"""
+
     def process_item(self, item, spider):
         """Method called for every item pipeline component"""
-        try:
-            # Assuming 'item' is a dictionary with the necessary fields to insert into tables
-            # Insert the logic to insert data into tables here
-            # e.g., self.insert_into_table(item)
-            pass
-        except mysql.connector.Error as err:
-            print(f"Error processing item: {err}")
-            self.conn.rollback()
-        else:
-            self.conn.commit()
+        self.dates_entries(item)
+        self.instruments_entries(item)
         return item
+
+    def instruments_entries(self, item):
+        """Inserts a record into the item table
+
+        Args:
+            item (scrapy.Item): The currently scraped item
+
+        Raises:
+            DropItem: Item could not be inserted into table
+        """
+        self.cursor.execute(
+            f"""SELECT * FROM Instruments WHERE isin = %s""", (item["isin"],)
+        )
+        current_isin_exits = self.cursor.fetchone()
+
+        if not current_isin_exits:
+            try:
+                self.cursor.execute(
+                    f"""
+                    INSERT INTO Instruments
+                    (name, type, isin, issuer)
+                    VALUES
+                    (%s, %s, %s, %s)""",
+                    (
+                        item["instrument_name"],
+                        item["instrument_type"],
+                        item["isin"],
+                        item["issuer"],
+                    ),
+                )
+
+                self.conn.commit()
+
+            except mysql.connector.Error as err:
+                raise DropItem(f"Error at Instruements, inserting: {err}")
+
+    def dates_entries(self, item):
+        """Inserts a record into the dates table
+
+        Args:
+            item (scrapy.Item): The currently scraped item
+
+        Raises:
+            DropItem: Item could not be inserted into table
+        """
+        self.cursor.execute(
+            f"""SELECT * FROM Dates WHERE date = %s""", (item["publication_date"],)
+        )
+        current_date_exits = self.cursor.fetchone()
+
+        if not current_date_exits:
+            try:
+                self.cursor.execute(
+                    f"""
+                    INSERT INTO Dates
+                    (date)
+                    VALUES
+                    (%s)""",
+                    (item["publication_date"],),
+                )
+
+                self.conn.commit()
+
+            except mysql.connector.Error as err:
+                raise DropItem(f"Error at Instruements, inserting: {err}")
+
+
+
+    """CLOSE SPIDER"""
 
     def close_spider(self, spider):
         """Method called when the spider is closed"""
