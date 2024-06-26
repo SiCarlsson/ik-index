@@ -2,6 +2,7 @@ import os
 import mysql.connector
 
 from scrapy.exceptions import DropItem
+from datetime import date, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -135,6 +136,7 @@ class MySqlPipeline:
         self.check_db_exists()
         self.create_db_connection()
         self.add_db_tables()
+        self.fill_dates_table()
 
     def check_db_exists(self):
         """Checks if the database exists and creates it if not."""
@@ -230,6 +232,39 @@ class MySqlPipeline:
             )"""
         )
 
+    def fill_dates_table(self):
+        """Inserts dates into the dates table
+
+        Raises:
+            DropItem: Item could not be inserted into table
+        """
+        self.cursor.execute("""SELECT date FROM Dates""")
+        dates_exist = self.cursor.fetchone()
+
+        if not dates_exist:
+            start_date = date.today()
+            end_date = date(2010, 1, 1)
+
+            delta = start_date - end_date
+
+            for i in range(delta.days + 1):
+                new_date = start_date - timedelta(days=i)
+
+                try:
+                    self.cursor.execute(
+                        f"""
+                        INSERT INTO Dates
+                        (date)
+                        VALUES
+                        (%s)""",
+                        (new_date,),
+                    )
+
+                    self.conn.commit()
+
+                except mysql.connector.Error as err:
+                    raise DropItem(f"Error at Dates, inserting: {err}")
+
     def create_currencies_table(self):
         """Create currencies table if not exists."""
         self.cursor.execute(
@@ -267,7 +302,6 @@ class MySqlPipeline:
     def process_item(self, item, spider):
         """Method called for every item pipeline component"""
         # Non-dependet tables
-        self.dates_entries(item)
         self.curerncies_entries(item)
         self.roles_entries(item)
         self.companies_entries(item)
@@ -345,36 +379,6 @@ class MySqlPipeline:
 
             except mysql.connector.Error as err:
                 raise DropItem(f"Error at Instruements, inserting: {err}")
-
-    def dates_entries(self, item):
-        """Inserts a record into the dates table
-
-        Args:
-            item (scrapy.Item): The currently scraped item
-
-        Raises:
-            DropItem: Item could not be inserted into table
-        """
-        self.cursor.execute(
-            f"""SELECT * FROM Dates WHERE date = %s""", (item["publication_date"],)
-        )
-        current_date_exits = self.cursor.fetchone()
-
-        if not current_date_exits:
-            try:
-                self.cursor.execute(
-                    f"""
-                    INSERT INTO Dates
-                    (date)
-                    VALUES
-                    (%s)""",
-                    (item["publication_date"],),
-                )
-
-                self.conn.commit()
-
-            except mysql.connector.Error as err:
-                raise DropItem(f"Error at Dates, inserting: {err}")
 
     def curerncies_entries(self, item):
         """Inserts a record into the currencies table
