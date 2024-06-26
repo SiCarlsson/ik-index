@@ -160,7 +160,8 @@ class MySqlPipeline:
                 host=self.host,
                 database=self.database,
             )
-            self.cursor = self.conn.cursor()
+            self.cursor = self.conn.cursor(buffered=True)
+
         except mysql.connector.Error as err:
             print(f"Error: {err}")
 
@@ -391,7 +392,8 @@ class MySqlPipeline:
             DropItem: Item could not be inserted into table
         """
         self.cursor.execute(
-            f"""SELECT * FROM Currencies WHERE currency = %s""", (item["currency"],)
+            f"""SELECT * FROM Currencies WHERE currency = %s""",
+            (item["currency"],),
         )
         current_currency_exits = self.cursor.fetchone()
 
@@ -475,32 +477,32 @@ class MySqlPipeline:
                 raise DropItem(f"Error at People, inserting: {err}")
 
     def dates_entries(self, item):
-         """Inserts a record into the dates table
-         Args:
-             item (scrapy.Item): The currently scraped item
-         Raises:
-             DropItem: Item could not be inserted into table
-         """
-         self.cursor.execute(
-             f"""SELECT * FROM Dates WHERE date = %s""", (item["publication_date"],)
-         )
-         current_date_exits = self.cursor.fetchone()
+        """Inserts a record into the dates table
+        Args:
+            item (scrapy.Item): The currently scraped item
+        Raises:
+            DropItem: Item could not be inserted into table
+        """
+        self.cursor.execute(
+            f"""SELECT * FROM Dates WHERE date = %s""", (item["publication_date"],)
+        )
+        current_date_exits = self.cursor.fetchone()
 
-         if not current_date_exits:
-             try:
-                 self.cursor.execute(
-                     f"""
+        if not current_date_exits:
+            try:
+                self.cursor.execute(
+                    f"""
                      INSERT INTO Dates
                      (date)
                      VALUES
                      (%s)""",
-                     (item["publication_date"],),
-                 )
+                    (item["publication_date"],),
+                )
 
-                 self.conn.commit()
+                self.conn.commit()
 
-             except mysql.connector.Error as err:
-                 raise DropItem(f"Error at Dates, inserting: {err}")
+            except mysql.connector.Error as err:
+                raise DropItem(f"Error at Dates, inserting: {err}")
 
     def transactions_entries(self, item):
         """Inserts a record into the transactions table
@@ -513,11 +515,12 @@ class MySqlPipeline:
         """
         try:
             self.cursor.execute(
-                f"""
+                """
                 INSERT INTO Transactions
-                (people_id, instrument_id)
+                (people_id, instrument_id, purchase_date_id, publication_date_id,
+                nature_of_purchase, related, volume, volume_unit, price, currency_id)
                 VALUES
-                (%s, %s)""",
+                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (
                     self.extract_person_id(item["issuer"], item["name"]),
                     self.extract_instrument_id(
@@ -526,8 +529,15 @@ class MySqlPipeline:
                         item["instrument_type"],
                         item["isin"],
                     ),
+                    self.extract_date_id(item["transaction_date"]),
+                    self.extract_date_id(item["publication_date"]),
+                    item["nature_of_purchase"],
+                    item["related"],
+                    item["volume"],
+                    item["volume_unit"],
+                    item["price"],
+                    self.extract_currency_id(item["currency"]),
                 ),
-                # (people_id, instrument_id, purchase_date_id, publication_date_id, nature_of_purchase, related, volume, volume_unit, price, currency_id)
             )
 
             self.conn.commit()
@@ -548,7 +558,12 @@ class MySqlPipeline:
             f"""SELECT id FROM Roles WHERE role = %s""",
             (role,),
         )
-        return self.cursor.fetchone()[0]
+
+        result = self.cursor.fetchone()
+        if result:
+            return result[0]
+        else:
+            raise DropItem(f"Role {role} not found in Roles table")
 
     def extract_company_id(self, company_name):
         """Retrieves the company_id from the database corresponding to the current company name
@@ -563,7 +578,12 @@ class MySqlPipeline:
             f"""SELECT id FROM Companies WHERE name = %s""",
             (company_name,),
         )
-        return self.cursor.fetchone()[0]
+
+        result = self.cursor.fetchone()
+        if result:
+            return result[0]
+        else:
+            raise DropItem(f"Company {company_name} not found in Companies table")
 
     def extract_person_id(self, company_name, person_name):
         """Retrieves the people_id from the database corresponding to the current item
@@ -579,7 +599,12 @@ class MySqlPipeline:
             f"""SELECT id FROM People WHERE name = %s AND company_id = %s""",
             (person_name, self.extract_company_id(company_name)),
         )
-        return self.cursor.fetchone()[0]
+
+        result = self.cursor.fetchone()
+        if result:
+            return result[0]
+        else:
+            raise DropItem(f"Person {person_name} not found in People table")
 
     def extract_instrument_id(self, company_name, name, type, isin):
         """Retrieves the people_id from the database corresponding to the current item
@@ -593,16 +618,66 @@ class MySqlPipeline:
         Returns:
             str: The instrument_id
         """
+        if isin is not None:
+            self.cursor.execute(
+                """SELECT id FROM Instruments WHERE isin = %s""",
+                (isin,),
+            )
+        else:
+            self.cursor.execute(
+                f"""SELECT id FROM Instruments WHERE company_id = %s AND name = %s AND type = %s""",
+                (
+                    self.extract_company_id(company_name),
+                    name,
+                    type,
+                ),
+            )
+
+        result = self.cursor.fetchone()
+        if result:
+            return result[0]
+        else:
+            raise DropItem(f"Instrument {name} ({type}) not found in Instruments table")
+
+    def extract_date_id(self, date_value):
+        """Retrieves the date_id from the database corresponding to the current date
+
+        Args:
+            date_value (str): The date value in YYYY-MM-DD format
+
+        Returns:
+            int: The date_id
+        """
         self.cursor.execute(
-            f"""SELECT id FROM Instruments WHERE company_id = %s AND name = %s AND type = %s AND isin = %s""",
-            (
-                self.extract_company_id(company_name),
-                name,
-                type,
-                isin,
-            ),
+            """SELECT id FROM Dates WHERE date = %s""",
+            (date_value,),
         )
-        return self.cursor.fetchone()[0]
+
+        result = self.cursor.fetchone()
+        if result:
+            return result[0]
+        else:
+            raise DropItem(f"Date {date_value} not found in Dates table")
+
+    def extract_currency_id(self, currency):
+        """Retrieves the currency_id from the database corresponding to the current currency
+
+        Args:
+            currency (str): The currency symbol
+
+        Returns:
+            int: The currency_id
+        """
+        self.cursor.execute(
+            """SELECT id FROM Currencies WHERE currency = %s""",
+            (currency,),
+        )
+
+        result = self.cursor.fetchone()
+        if result:
+            return result[0]
+        else:
+            raise DropItem(f"Currency {currency} not found in Currencies table")
 
     """CLOSE SPIDER"""
 
