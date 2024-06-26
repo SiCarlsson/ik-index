@@ -257,6 +257,7 @@ class MySqlPipeline:
         self.dates_entries(item)
         self.instruments_entries(item)
         self.curerncies_entries(item)
+        self.roles_entries(item)
         return item
 
     def instruments_entries(self, item):
@@ -325,7 +326,7 @@ class MySqlPipeline:
                 raise DropItem(f"Error at Dates, inserting: {err}")
 
     def curerncies_entries(self, item):
-        """Inserts a record into the dates table
+        """Inserts a record into the currencies table
 
         Args:
             item (scrapy.Item): The currently scraped item
@@ -353,6 +354,36 @@ class MySqlPipeline:
 
             except mysql.connector.Error as err:
                 raise DropItem(f"Error at Currencies, inserting: {err}")
+
+    def roles_entries(self, item):
+        """Inserts a record into the currencies table
+
+        Args:
+            item (scrapy.Item): The currently scraped item
+
+        Raises:
+            DropItem: Item could not be inserted into table
+        """
+        self.cursor.execute(
+            f"""SELECT * FROM Roles WHERE role = %s""", (item["role"],)
+        )
+        current_role_exits = self.cursor.fetchone()
+
+        if not current_role_exits:
+            try:
+                self.cursor.execute(
+                    f"""
+                    INSERT INTO Roles
+                    (role)
+                    VALUES
+                    (%s)""",
+                    (item["role"],),
+                )
+
+                self.conn.commit()
+
+            except mysql.connector.Error as err:
+                raise DropItem(f"Error at Roles, inserting: {err}")
 
     """CLOSE SPIDER"""
 
