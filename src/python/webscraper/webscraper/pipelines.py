@@ -304,6 +304,7 @@ class MySqlPipeline:
         # Non-dependet tables
         self.curerncies_entries(item)
         self.roles_entries(item)
+        self.dates_entries(item)
         self.companies_entries(item)
 
         # Dependet tables
@@ -472,6 +473,34 @@ class MySqlPipeline:
 
             except mysql.connector.Error as err:
                 raise DropItem(f"Error at People, inserting: {err}")
+
+    def dates_entries(self, item):
+         """Inserts a record into the dates table
+         Args:
+             item (scrapy.Item): The currently scraped item
+         Raises:
+             DropItem: Item could not be inserted into table
+         """
+         self.cursor.execute(
+             f"""SELECT * FROM Dates WHERE date = %s""", (item["publication_date"],)
+         )
+         current_date_exits = self.cursor.fetchone()
+
+         if not current_date_exits:
+             try:
+                 self.cursor.execute(
+                     f"""
+                     INSERT INTO Dates
+                     (date)
+                     VALUES
+                     (%s)""",
+                     (item["publication_date"],),
+                 )
+
+                 self.conn.commit()
+
+             except mysql.connector.Error as err:
+                 raise DropItem(f"Error at Dates, inserting: {err}")
 
     def transactions_entries(self, item):
         """Inserts a record into the transactions table
