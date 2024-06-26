@@ -123,7 +123,7 @@ class AllFinancialDataSpider(scrapy.Spider):
         item["price"] = response.xpath(
             f'//*[@id="grid-list"]/div[1]/div/table/tbody/tr[{row + 1}]/td[13]/text()'
         ).extract_first()
-        item["curreny"] = response.xpath(
+        item["currency"] = response.xpath(
             f'//*[@id="grid-list"]/div[1]/div/table/tbody/tr[{row + 1}]/td[14]/text()'
         ).extract_first()
         item["status"] = response.xpath(

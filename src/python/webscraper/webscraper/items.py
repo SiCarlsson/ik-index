@@ -15,5 +15,5 @@ class WebscraperItem(scrapy.Item):
     volume = scrapy.Field()
     volume_unit = scrapy.Field()
     price = scrapy.Field()
-    curreny = scrapy.Field()
+    currency = scrapy.Field()
     status = scrapy.Field()

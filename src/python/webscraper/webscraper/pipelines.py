@@ -134,8 +134,6 @@ class MySqlPipeline:
         self.conn = None
         self.cursor = None
 
-
-
     """OPEN SPIDER"""
 
     def open_spider(self, spider):
@@ -252,14 +250,13 @@ class MySqlPipeline:
             )"""
         )
 
-
-
     """PROCESS ITEM"""
 
     def process_item(self, item, spider):
         """Method called for every item pipeline component"""
         self.dates_entries(item)
         self.instruments_entries(item)
+        self.curerncies_entries(item)
         return item
 
     def instruments_entries(self, item):
@@ -325,9 +322,37 @@ class MySqlPipeline:
                 self.conn.commit()
 
             except mysql.connector.Error as err:
-                raise DropItem(f"Error at Instruements, inserting: {err}")
+                raise DropItem(f"Error at Dates, inserting: {err}")
 
+    def curerncies_entries(self, item):
+        """Inserts a record into the dates table
 
+        Args:
+            item (scrapy.Item): The currently scraped item
+
+        Raises:
+            DropItem: Item could not be inserted into table
+        """
+        self.cursor.execute(
+            f"""SELECT * FROM Currencies WHERE currency = %s""", (item["currency"],)
+        )
+        current_currency_exits = self.cursor.fetchone()
+
+        if not current_currency_exits:
+            try:
+                self.cursor.execute(
+                    f"""
+                    INSERT INTO Currencies
+                    (currency)
+                    VALUES
+                    (%s)""",
+                    (item["currency"],),
+                )
+
+                self.conn.commit()
+
+            except mysql.connector.Error as err:
+                raise DropItem(f"Error at Currencies, inserting: {err}")
 
     """CLOSE SPIDER"""
 
