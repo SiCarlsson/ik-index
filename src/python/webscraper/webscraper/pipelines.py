@@ -11,15 +11,11 @@ class DataCleansePipeline:
     def __init__(self):
         pass
 
-
-
     """OPEN SPIDER"""
 
     def open_spider(self, spider):
         """Method called when the spider is opened"""
         pass
-
-
 
     """PROCESS ITEM"""
 
@@ -116,8 +112,6 @@ class DataCleansePipeline:
         else:
             return field
 
-
-
     """CLOSE SPIDER"""
 
     def close_spider(self, spider):
@@ -170,11 +164,17 @@ class MySqlPipeline:
 
     def add_db_tables(self):
         """Create necessary tables in the database."""
-        self.create_instruments_table()
+        # Non-dependet tables
+        self.create_companies_table()
         self.create_roles_table()
-        self.create_people_table()
         self.create_dates_table()
         self.create_currencies_table()
+
+        # Dependet tables
+        self.create_instruments_table()
+        self.create_people_table()
+
+        # Multi-dependet tables
         self.create_transactions_table()
 
     def create_instruments_table(self):
@@ -182,10 +182,11 @@ class MySqlPipeline:
         self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS Instruments (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            company_id INT,
             name VARCHAR(200),
             type VARCHAR(75),
             isin VARCHAR(40) UNIQUE,
-            issuer VARCHAR(255)
+            FOREIGN KEY (company_id) REFERENCES Companies(id)
             )"""
         )
 
@@ -198,15 +199,25 @@ class MySqlPipeline:
             )"""
         )
 
+    def create_companies_table(self):
+        """Create people table if not exists."""
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS Companies (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) UNIQUE
+            )"""
+        )
+
     def create_people_table(self):
         """Create people table if not exists."""
         self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS People (
             id INT AUTO_INCREMENT PRIMARY KEY,
             role_id INT,
+            company_id INT,
             name VARCHAR(255),
-            related BOOLEAN,
-            FOREIGN KEY (role_id) REFERENCES Roles(id)
+            FOREIGN KEY (role_id) REFERENCES Roles(id),
+            FOREIGN KEY (company_id) REFERENCES Companies(id)
             )"""
         )
 
@@ -238,6 +249,7 @@ class MySqlPipeline:
             purchase_date_id INT,
             publication_date_id INT,
             nature_of_purchase VARCHAR(100),
+            related VARCHAR(20),
             volume INT,
             volume_unit VARCHAR(50),
             price DECIMAL(14, 6),
@@ -254,11 +266,50 @@ class MySqlPipeline:
 
     def process_item(self, item, spider):
         """Method called for every item pipeline component"""
+        # Non-dependet tables
         self.dates_entries(item)
-        self.instruments_entries(item)
         self.curerncies_entries(item)
         self.roles_entries(item)
+        self.companies_entries(item)
+
+        # Dependet tables
+        self.instruments_entries(item)
+        self.people_entries(item)
+
+        # Multi-dependet tables
+        self.transactions_entries(item)
+
         return item
+
+    def companies_entries(self, item):
+        """Inserts a record into the companies table
+
+        Args:
+            item (scrapy.Item): The currently scraped item
+
+        Raises:
+            DropItem: Item could not be inserted into table
+        """
+        self.cursor.execute(
+            f"""SELECT * FROM Companies WHERE name = %s""", (item["issuer"],)
+        )
+        current_company_exits = self.cursor.fetchone()
+
+        if not current_company_exits:
+            try:
+                self.cursor.execute(
+                    f"""
+                    INSERT INTO Companies
+                    (name)
+                    VALUES
+                    (%s)""",
+                    (item["issuer"],),
+                )
+
+                self.conn.commit()
+
+            except mysql.connector.Error as err:
+                raise DropItem(f"Error at Companies, inserting: {err}")
 
     def instruments_entries(self, item):
         """Inserts a record into the item table
@@ -279,14 +330,14 @@ class MySqlPipeline:
                 self.cursor.execute(
                     f"""
                     INSERT INTO Instruments
-                    (name, type, isin, issuer)
+                    (company_id, name, type, isin)
                     VALUES
                     (%s, %s, %s, %s)""",
                     (
+                        self.extract_company_id(item["issuer"]),
                         item["instrument_name"],
                         item["instrument_type"],
                         item["isin"],
-                        item["issuer"],
                     ),
                 )
 
@@ -364,9 +415,7 @@ class MySqlPipeline:
         Raises:
             DropItem: Item could not be inserted into table
         """
-        self.cursor.execute(
-            f"""SELECT * FROM Roles WHERE role = %s""", (item["role"],)
-        )
+        self.cursor.execute(f"""SELECT * FROM Roles WHERE role = %s""", (item["role"],))
         current_role_exits = self.cursor.fetchone()
 
         if not current_role_exits:
@@ -384,6 +433,143 @@ class MySqlPipeline:
 
             except mysql.connector.Error as err:
                 raise DropItem(f"Error at Roles, inserting: {err}")
+
+    def people_entries(self, item):
+        """Inserts a record into the people table
+
+        Args:
+            item (scrapy.Item): The currently scraped item
+
+        Raises:
+            DropItem: Item could not be inserted into table
+        """
+        self.cursor.execute(
+            f"""SELECT * FROM People WHERE company_id = %s AND name = %s""",
+            (self.extract_company_id(item["issuer"]), item["name"]),
+        )
+        current_role_exits = self.cursor.fetchone()
+
+        if not current_role_exits:
+            try:
+                self.cursor.execute(
+                    f"""
+                    INSERT INTO People
+                    (role_id, company_id, name)
+                    VALUES
+                    (%s, %s, %s)""",
+                    (
+                        self.extract_role_id(item["role"]),
+                        self.extract_company_id(item["issuer"]),
+                        item["name"],
+                    ),
+                )
+
+                self.conn.commit()
+
+            except mysql.connector.Error as err:
+                raise DropItem(f"Error at People, inserting: {err}")
+
+    def transactions_entries(self, item):
+        """Inserts a record into the transactions table
+
+        Args:
+            item (scrapy.Item): The currently scraped item
+
+        Raises:
+            DropItem: Item could not be inserted into table
+        """
+        try:
+            self.cursor.execute(
+                f"""
+                INSERT INTO Transactions
+                (people_id, instrument_id)
+                VALUES
+                (%s, %s)""",
+                (
+                    self.extract_person_id(item["issuer"], item["name"]),
+                    self.extract_instrument_id(
+                        item["issuer"],
+                        item["instrument_name"],
+                        item["instrument_type"],
+                        item["isin"],
+                    ),
+                ),
+                # (people_id, instrument_id, purchase_date_id, publication_date_id, nature_of_purchase, related, volume, volume_unit, price, currency_id)
+            )
+
+            self.conn.commit()
+
+        except mysql.connector.Error as err:
+            raise DropItem(f"Error at Transactions, inserting: {err}")
+
+    def extract_role_id(self, role):
+        """Retrieves the role_id from the database corresponding to the current role
+
+        Args:
+            role (str): The role of the current item
+
+        Returns:
+            str: The role_id
+        """
+        self.cursor.execute(
+            f"""SELECT id FROM Roles WHERE role = %s""",
+            (role,),
+        )
+        return self.cursor.fetchone()[0]
+
+    def extract_company_id(self, company_name):
+        """Retrieves the company_id from the database corresponding to the current company name
+
+        Args:
+            role (str): The name of the issuer of the current item
+
+        Returns:
+            str: The company_id
+        """
+        self.cursor.execute(
+            f"""SELECT id FROM Companies WHERE name = %s""",
+            (company_name,),
+        )
+        return self.cursor.fetchone()[0]
+
+    def extract_person_id(self, company_name, person_name):
+        """Retrieves the people_id from the database corresponding to the current item
+
+        Args:
+            company_name (str): The name of the issuer of the current item
+            person_name (str): The name of the person of the current item
+
+        Returns:
+            str: The person_id
+        """
+        self.cursor.execute(
+            f"""SELECT id FROM People WHERE name = %s AND company_id = %s""",
+            (person_name, self.extract_company_id(company_name)),
+        )
+        return self.cursor.fetchone()[0]
+
+    def extract_instrument_id(self, company_name, name, type, isin):
+        """Retrieves the people_id from the database corresponding to the current item
+
+        Args:
+            company_name (str): The name of the issuer of the current item
+            name (str): The name of the instrument of the current item
+            type (str): The type of the instrument of the current item
+            isin (str): The isin of the current item
+
+        Returns:
+            str: The instrument_id
+        """
+        self.cursor.execute(
+            f"""SELECT id FROM Instruments WHERE company_id = %s AND name = %s AND type = %s AND isin = %s""",
+            (
+                self.extract_company_id(company_name),
+                name,
+                type,
+                isin,
+            ),
+        )
+        return self.cursor.fetchone()[0]
 
     """CLOSE SPIDER"""
 
