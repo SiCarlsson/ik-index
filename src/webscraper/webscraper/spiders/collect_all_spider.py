@@ -35,7 +35,18 @@ class AllFinancialDataSpider(scrapy.Spider):
 
         self.CURRENT_PAGE_NUMBER = 1
 
-    def _parse_date(self, date_str):
+    def _parse_date(self, date_str: str):
+        """Method parses the date and ensures correct fomatting
+
+        Args:
+            date_str (str): A string containing a date in the format YYYY-MM-DD
+
+        Raises:
+            ValueError: If the date format is not followed
+
+        Returns:
+            str: The date as a string in the correct format
+        """
         try:
             year, month, day = map(int, date_str.split("-"))
             return datetime(year, month, day).strftime("%Y-%m-%d")
@@ -45,9 +56,19 @@ class AllFinancialDataSpider(scrapy.Spider):
             )
 
     def _default_start_date(self):
+        """Contains the default start date
+
+        Returns:
+            str: Default start date
+        """
         return (self.TODAY - timedelta(days=1)).strftime("%Y-%m-%d")
 
     def _default_end_date(self):
+        """Conatins the default end date
+
+        Returns:
+            str: Default end date
+        """
         return datetime(2000, 1, 1).strftime("%Y-%m-%d")
 
     def parse(self, response: Response):
