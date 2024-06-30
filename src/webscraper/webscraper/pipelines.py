@@ -234,33 +234,32 @@ class MySqlPipeline:
         )
 
     def fill_dates_table(self):
-        """Inserts dates into the dates table
+        """Inserts dates into the dates table in ascending order from 2010-01-01 to today.
 
         Raises:
             DropItem: Item could not be inserted into table
         """
-        self.cursor.execute("""SELECT date FROM Dates""")
+        self.cursor.execute("SELECT date FROM Dates")
         dates_exist = self.cursor.fetchone()
 
         if not dates_exist:
-            start_date = date.today()
-            end_date = date(2010, 1, 1)
+            start_date = date(2010, 1, 1)
+            end_date = date(2024, 6, 25)
 
-            delta = start_date - end_date
+            delta = end_date - start_date
 
             for i in range(delta.days + 1):
-                new_date = start_date - timedelta(days=i)
+                new_date = start_date + timedelta(days=i)
 
                 try:
                     self.cursor.execute(
-                        f"""
+                        """
                         INSERT INTO Dates
                         (date)
                         VALUES
                         (%s)""",
                         (new_date,),
                     )
-
                     self.conn.commit()
 
                 except mysql.connector.Error as err:
