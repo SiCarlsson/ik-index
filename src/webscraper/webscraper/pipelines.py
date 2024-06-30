@@ -244,7 +244,7 @@ class MySqlPipeline:
 
         if not dates_exist:
             start_date = date(2010, 1, 1)
-            end_date = date(2024, 6, 25)
+            end_date = date.today()
 
             delta = end_date - start_date
 
@@ -482,26 +482,29 @@ class MySqlPipeline:
         Raises:
             DropItem: Item could not be inserted into table
         """
-        self.cursor.execute(
-            f"""SELECT * FROM Dates WHERE date = %s""", (item["publication_date"],)
-        )
-        current_date_exits = self.cursor.fetchone()
+        item_dates = [item["publication_date"], item["transaction_date"]]
 
-        if not current_date_exits:
-            try:
-                self.cursor.execute(
-                    f"""
-                     INSERT INTO Dates
-                     (date)
-                     VALUES
-                     (%s)""",
-                    (item["publication_date"],),
-                )
+        for date in item_dates:
+            self.cursor.execute(
+                f"""SELECT date FROM Dates WHERE date = %s""", (date,)
+            )
+            current_date_exits = self.cursor.fetchone()
 
-                self.conn.commit()
+            if not current_date_exits:
+                try:
+                    self.cursor.execute(
+                        f"""
+                        INSERT INTO Dates
+                        (date)
+                        VALUES
+                        (%s)""",
+                        (date,),
+                    )
 
-            except mysql.connector.Error as err:
-                raise DropItem(f"Error at Dates, inserting: {err}")
+                    self.conn.commit()
+
+                except mysql.connector.Error as err:
+                    raise DropItem(f"Error at Dates, inserting: {err}")
 
     def transactions_entries(self, item):
         """Inserts a record into the transactions table
