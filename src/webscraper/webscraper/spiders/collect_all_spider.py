@@ -11,21 +11,22 @@ class AllFinancialDataSpider(scrapy.Spider):
     name = "cas"
     allowed_domains = ["marknadssok.fi.se"]
     start_urls = [
-        "https://marknadssok.fi.se/publiceringsklient?page=1",
+        "https://marknadssok.fi.se/publiceringsklient?page=",
     ]
 
     def __init__(
         self,
         start_date: str = None,
         end_date: str = None,
+        page_jump: int = None,
         *args,
         **kwargs,
     ):
         super(AllFinancialDataSpider, self).__init__(*args, **kwargs)
-        self.download_delay = 2
+
+        self.COLLECTED_MAX_PAGES = False
 
         self.TODAY = datetime.today()
-
         self.START_DATE = (
             self._parse_date(start_date) if start_date else self._default_start_date()
         )
@@ -33,7 +34,13 @@ class AllFinancialDataSpider(scrapy.Spider):
             self._parse_date(end_date) if end_date else self._default_end_date()
         )
 
-        self.CURRENT_PAGE_NUMBER = 1
+        self.MAXIMUM_PAGE_NUMBER = None
+        self.CURRENT_PAGE_NUMBER = (
+            1 if page_jump is None else self._validate_page_jump(page_jump)
+        )
+
+        self.start_urls[0] = self.start_urls[0] + str(self.CURRENT_PAGE_NUMBER)
+        self.download_delay = 2
 
     def _parse_date(self, date_str: str):
         """Method parses the date and ensures correct fomatting
@@ -71,6 +78,18 @@ class AllFinancialDataSpider(scrapy.Spider):
         """
         return datetime(2000, 1, 1).strftime("%Y-%m-%d")
 
+    def _validate_page_jump(self, page_jump):
+        """Validate and return the page jump value as a positive integer."""
+        try:
+            page_number = int(page_jump)
+            if page_number < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"Invalid page_jump: {page_jump}. Must be a positive integer."
+            )
+        return page_number
+
     def parse(self, response: Response):
         """Method is in charge of processing the response and returning scraped data and/or more URLs to follow.
 
@@ -83,7 +102,7 @@ class AllFinancialDataSpider(scrapy.Spider):
         Yields:
             scrapy.Item: Current scrapy item
         """
-        self.initialize_spider(response)
+        self.set_max_page_number(response)
 
         for row in range(0, self.get_table_lenght(response)):
             item = self.extract_item(response, row)
@@ -102,29 +121,30 @@ class AllFinancialDataSpider(scrapy.Spider):
         else:
             raise CloseSpider("Maximum page reached!")
 
-    def initialize_spider(self, response: Response):
-        """Method holds logic that should only run once before the spider starts scraping
-
-        Args:
-            response (Response): The initial response of the spider
-        """
-        if self.CURRENT_PAGE_NUMBER == 1:
-            self.MAXIMUM_PAGE_NUMBER = self.get_max_page_number(response)
-
-    def get_max_page_number(self, response: Response):
-        """Method gets and sets the maximum amount of pages on the site
+    def set_max_page_number(self, response: Response):
+        """Method sets the maximum amount of pages on the site
 
         Args:
             response (Response): The response on the website
         """
+        if self.COLLECTED_MAX_PAGES is False:
+            if self.CURRENT_PAGE_NUMBER < 8:
+                index = 14
+            elif (
+                self.CURRENT_PAGE_NUMBER > (self.MAXIMUM_PAGE_NUMBER or 0) - 9
+                and (self.MAXIMUM_PAGE_NUMBER or 0) > -9
+            ):
+                index = 16
+            else:
+                index = 15
 
-        return int(
-            response.xpath(
-                '//*[@id="grid-list"]/div[2]/div/div/div[1]/ul/li[14]/a/text()'
+            xpath = (
+                f'//*[@id="grid-list"]/div[2]/div/div/div[1]/ul/li[{index}]/a/text()'
             )
-            .get()
-            .replace("s", "")
-        )
+
+            page_number_str = response.xpath(xpath).get().replace("s", "")
+            self.MAXIMUM_PAGE_NUMBER = int(page_number_str)
+            self.COLLECTED_MAX_PAGES = True
 
     def get_table_lenght(self, response: Response):
         """The method gets the lenght of the current table
