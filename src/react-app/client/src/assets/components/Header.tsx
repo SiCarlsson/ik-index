@@ -35,14 +35,14 @@ const Header = () => {
 
 				{/** Menu backdrop */}
 				<div
-					className={`md:hidden absolute w-full h-screen left-0 top-0 z-[-2] bg-black transition-opacity duration-500 ease-in
+					className={`md:hidden absolute w-full h-screen left-0 top-0 z-[-2] bg-black transition-opacity duration-[400ms] ease-out
           ${isOpen ? "opacity-50" : "opacity-0"}`}
 				></div>
 
 				{/** Nav links */}
 				<ul
 					className={`md:flex md:justify-evenly md:static absolute md:py-0 py-2 md:pl-0
-          bg-white md:w-6/12 w-full left-0 transition-all duration-500 md:z-auto z-[-1] ease-in
+          bg-white md:w-6/12 w-full left-0 transition-all duration-500 md:z-auto z-[-1] ease-out
           ${isOpen ? "top-12" : "top-[-300px]"}`}
 				>
 					{Links.map((link) => (
